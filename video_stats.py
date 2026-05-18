@@ -57,6 +57,40 @@ def get_video_ids(playlist_id):
         logger.error(f"Key error occurred: {e}")
         return None
 
+def batch_list_video_ids(video_ids, batch_size=50):
+    for video_id in range(0, len(video_ids), batch_size):
+        yield video_ids[video_id:video_id + batch_size]
+
+
+def extract_video_stats(video_ids):
+    extract_video_data = []
+    url = "https://www.googleapis.com/youtube/v3/videos?part=contentDetails&part=statistics&part=snippet&id={video_ids}&key={YOUTUBE_API_KEY}"
+
+    try:
+        for batch in batch_list_video_ids(video_ids, MAX_RESULTS):
+            video_ids_str = ",".join(batch)  
+            response = requests.get(url.format(video_ids=video_ids_str, YOUTUBE_API_KEY=YOUTUBE_API_KEY))
+            response.raise_for_status()  # Check if the request was successful
+            data = response.json()
+            for item in data.get('items', []):
+                extract_video_data.append({
+                    'videoId': item['id'],
+                    'title': item['snippet']['title'],
+                    'publishedAt': item['snippet']['publishedAt'],
+                    'duration': item['contentDetails']['duration'],
+                    'viewCount': item['statistics'].get('viewCount', 0),
+                    'likeCount': item['statistics'].get('likeCount', 0),
+                    'commentCount': item['statistics'].get('commentCount', 0)
+                })
+
+        return extract_video_data
+    
+    except requests.RequestException as e:
+        logger.error(f"HTTP error occurred: {e}")
+    except KeyError as e:
+        logger.error(f"Key error occurred: {e}")
+
+
 if __name__ == "__main__":
     channel_handle = "MrBeast"
 
@@ -65,5 +99,7 @@ if __name__ == "__main__":
         logger.info(f"Channel Playlist ID for {channel_handle}: {channel_playlist_id}")
         video_ids = get_video_ids(channel_playlist_id)
         logger.info(f"Video IDs for {channel_handle}: {video_ids}")
+        video_stats = extract_video_stats(video_ids)
+        logger.info(f"Extracted video stats for {channel_handle}: {video_stats}")
     else:
         logger.error("Failed to retrieve channel playlist ID.")
