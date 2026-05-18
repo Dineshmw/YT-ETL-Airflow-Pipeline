@@ -3,6 +3,7 @@ import os
 import json
 from dotenv import load_dotenv
 from app.logging.config import LoggerFactory
+from datetime import date
 
 load_dotenv(dotenv_path=".env")
 
@@ -35,6 +36,7 @@ def get_video_ids(playlist_id):
     logger.info(f"Fetching video IDs for playlist: {playlist_id}")
 
     PAGE_TOKEN = None
+    all_video_ids = []
     try:
         while True:
             url = f"https://www.googleapis.com/youtube/v3/playlistItems?part=contentDetails&maxResults={MAX_RESULTS}&playlistId={playlist_id}&key={YOUTUBE_API_KEY}"
@@ -45,11 +47,12 @@ def get_video_ids(playlist_id):
             response.raise_for_status()  # Check if the request was successful
             data = response.json()
             video_ids = [item['contentDetails']['videoId'] for item in data['items']]
+            all_video_ids.extend(video_ids)
             PAGE_TOKEN = data.get('nextPageToken')
             
             if not PAGE_TOKEN:
                 break
-        return video_ids
+        return all_video_ids
 
     except requests.RequestException as e:
         logger.error(f"HTTP error occurred: {e}")
@@ -90,6 +93,14 @@ def extract_video_stats(video_ids):
     except KeyError as e:
         logger.error(f"Key error occurred: {e}")
 
+def save_video_stats(extracted_video_stats):
+    file_path = f"data/video_stats_{date.today()}.json"
+    try:
+        with open(file_path, 'w', encoding='utf-8') as json_file:
+            json.dump(extracted_video_stats, json_file, indent=4, ensure_ascii=False)
+        logger.info(f"Video stats saved to {file_path}")
+    except IOError as e:
+        logger.error(f"IO error occurred: {e}")
 
 if __name__ == "__main__":
     channel_handle = "MrBeast"
@@ -101,5 +112,6 @@ if __name__ == "__main__":
         logger.info(f"Video IDs for {channel_handle}: {video_ids}")
         video_stats = extract_video_stats(video_ids)
         logger.info(f"Extracted video stats for {channel_handle}: {video_stats}")
+        save_video_stats(video_stats)
     else:
         logger.error("Failed to retrieve channel playlist ID.")
